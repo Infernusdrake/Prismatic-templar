@@ -64,6 +64,7 @@ var _charge_orb:  MeshInstance3D
 var _charge_mat:  StandardMaterial3D
 var _danger_ring: MeshInstance3D
 var _active_tw:   Tween = null
+var _animator:    EnemyAnimator = null
 
 signal health_changed(val: float, max_val: float)
 signal posture_changed(val: float, max_val: float)
@@ -88,7 +89,12 @@ func _ready() -> void:
 	_mesh.mesh = cm
 	_mesh.material_override = _mat
 	_mesh.position.y = 0.9
+	_mesh.name = "Body"
 	add_child(_mesh)
+
+	_animator = EnemyAnimator.new()
+	add_child(_animator)
+	_animator.init()
 
 	var col := CollisionShape3D.new()
 	var cs := CapsuleShape3D.new()
@@ -202,6 +208,37 @@ func _run_ai(delta: float) -> void:
 		State.ATTACKING: _ai_attacking(delta)
 		State.RECOVERY: _ai_recovery(delta)
 		State.COOLDOWN: _ai_cooldown(delta)
+	_update_anim()
+
+func _update_anim() -> void:
+	if _animator == null:
+		return
+	var moving := Vector2(velocity.x, velocity.z).length() > 0.5
+	match ai_state:
+		State.WINDUP:
+			match cur_atk:
+				Atk.LIGHT: _animator.play("windup_light")
+				Atk.HEAVY: _animator.play("windup_heavy")
+				Atk.COMBO: _animator.play("windup_combo")
+		State.ATTACKING:
+			match cur_atk:
+				Atk.LIGHT: _animator.play("attack_light")
+				Atk.HEAVY: _animator.play("attack_heavy")
+				Atk.COMBO: _animator.play("attack_combo")
+		State.RECOVERY, State.COOLDOWN:
+			_animator.play("idle")
+		State.CHASE:
+			if moving:
+				_animator.play("walk")
+			else:
+				_animator.play("idle")
+		State.PATROL:
+			if moving:
+				_animator.play("walk")
+			else:
+				_animator.play("idle")
+		_:
+			_animator.play("idle")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  AI states
@@ -468,9 +505,51 @@ func take_hit(dmg: float, posture_dmg: float) -> void:
 			_trigger_execute()
 
 	_flash_hit()
+	if _animator:
+		_animator.force_play("hit_react")
+
+	# Particle burst at chest height
+	var impact_pos := global_position + Vector3(0, 1.0, 0)
+	_spawn_impact_fx(impact_pos, Color(1.0, 0.4, 0.1))
 
 	if health <= 0.0:
 		_die()
+
+func _spawn_impact_fx(pos: Vector3, color: Color) -> void:
+	var ps := GPUParticles3D.new()
+	ps.top_level       = true
+	ps.global_position = pos
+	ps.emitting        = false
+	ps.one_shot        = true
+	ps.explosiveness   = 1.0
+	ps.amount          = 14
+	ps.lifetime        = 0.40
+
+	var mat := ParticleProcessMaterial.new()
+	mat.direction            = Vector3(0, 1, 0)
+	mat.spread               = 55.0
+	mat.initial_velocity_min = 2.5
+	mat.initial_velocity_max = 5.5
+	mat.gravity              = Vector3(0, -6.0, 0)
+	mat.scale_min            = 0.05
+	mat.scale_max            = 0.12
+	mat.color                = color
+	ps.process_material = mat
+
+	var sm  := SphereMesh.new()
+	sm.radius = 0.06
+	sm.height = 0.12
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color              = color
+	pm.emission_enabled          = true
+	pm.emission                  = color
+	pm.emission_energy_multiplier = 2.5
+	pm.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ps.draw_pass_1 = sm
+
+	get_tree().root.add_child(ps)
+	ps.emitting = true
+	get_tree().create_timer(0.55).timeout.connect(ps.queue_free)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Execute system (unchanged)
@@ -553,6 +632,8 @@ func is_winding_up() -> bool:
 func receive_parry_stagger() -> void:
 	_hide_windup()
 	_enter(State.RECOVERY, 1.8)
+	if _animator:
+		_animator.force_play("stagger")
 	# AUDIO: play parry_stagger.ogg  (heavy impact, enemy grunt)
 	var tw := create_tween()
 	tw.tween_property(_mat, "albedo_color", Color(0.7, 1.0, 1.0), 0.05)
@@ -572,6 +653,9 @@ func receive_block_stagger() -> void:
 func _play_finisher() -> void:
 	is_finishering = true
 	_hide_windup()
+	# Stop animator so tween has full control of the mesh
+	if _animator:
+		_animator.stop()
 	var tw := create_tween()
 	tw.tween_property(_mat,  "albedo_color", Color(1, 1, 1),             0.15)
 	tw.tween_interval(0.3)
@@ -585,5 +669,8 @@ func _die() -> void:
 	_hide_windup()
 	died.emit()
 	if not is_finishering:
-		var tw := create_tween()
-		tw.tween_property(_mesh, "scale", Vector3(1.0, 0.05, 1.0), 0.5)
+		if _animator:
+			_animator.force_play("death")
+		else:
+			var tw := create_tween()
+			tw.tween_property(_mesh, "scale", Vector3(1.0, 0.05, 1.0), 0.5)

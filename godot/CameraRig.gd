@@ -10,6 +10,9 @@ var target: Node3D = null
 var yaw   := 0.0
 var pitch := -0.38
 
+var _shake_amt := 0.0
+const SHAKE_DECAY := 14.0
+
 func _ready() -> void:
 	var cam := Camera3D.new()
 	cam.name = "Camera3D"
@@ -43,7 +46,22 @@ func _process(_delta: float) -> void:
 	)
 	var cam_pos := focus + cam_dir * DISTANCE
 
+	# Apply screen-space shake offset
+	var shake_offset := Vector3.ZERO
+	if _shake_amt > 0.005:
+		shake_offset = Vector3(
+			randf_range(-1.0, 1.0) * _shake_amt,
+			randf_range(-1.0, 1.0) * _shake_amt,
+			0.0
+		)
+		_shake_amt = move_toward(_shake_amt, 0.0, SHAKE_DECAY * _delta)
+
 	var cam := get_child(0) as Camera3D
 	if cam:
-		cam.global_position = cam_pos
+		cam.global_position = cam_pos + shake_offset
 		cam.look_at(focus, Vector3.UP)
+
+## Add trauma to the camera shake (call from Player on hit / parry outcome).
+## Multiple callers accumulate — the larger value wins.
+func shake(intensity: float) -> void:
+	_shake_amt = max(_shake_amt, intensity)

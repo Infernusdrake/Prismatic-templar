@@ -1,8 +1,8 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1774787287
-Arena.gd::GDScript::9220959682942741252::1774773815::0::1::::<>Node3D<><>0<>0<><>::
+::res://::1774787554
+Arena.gd::GDScript::9220959682942741252::1774787465::0::1::::<>Node3D<><>0<>0<><>::
 Arena.tscn::PackedScene::96723069144820152::1774773815::0::1::::<><><>0<>0<><>::res://Arena.gd
 CameraRig.gd::GDScript::497488168593761166::1774773815::0::1::::CameraRig<>Node3D<><>0<>0<><>::
-Enemy.gd::GDScript::2569818535898983312::1774773815::0::1::::Enemy<>CharacterBody3D<><>0<>0<><>::
+Enemy.gd::GDScript::2569818535898983312::1774787465::0::1::::Enemy<>CharacterBody3D<><>0<>0<><>::
 HUD.gd::GDScript::6539267082899548237::1774780873::0::1::::HUD<>CanvasLayer<><>0<>0<><>::
 Player.gd::GDScript::5486274257563785716::1774780723::0::1::::Player<>CharacterBody3D<><>0<>0<><>::

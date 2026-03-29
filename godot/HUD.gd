@@ -212,7 +212,9 @@ func show_execute(on: bool, window: float = 2.0) -> void:
 
 func update_combo(index: int) -> void:
 	if _combo_lbl:
-		_combo_lbl.text = "  HIT  " + "●" * index + "○" * (3 - index) if index > 0 else ""
+		var filled = "●".repeat(index)
+		var empty = "○".repeat(3 - index)
+		_combo_lbl.text = "  HIT  " + filled + empty if index > 0 else ""
 
 func update_lockon(on: bool) -> void:
 	if _lockon_lbl:

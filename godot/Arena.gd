@@ -159,7 +159,8 @@ func _spawn_enemy() -> void:
 	_enemy = Enemy.new()
 	_enemy.position = Vector3(0, 0, -4)
 	add_child(_enemy)
-	_player.enemy = _enemy
+	_player.enemy  = _enemy
+	_enemy.target  = _player   # AI target
 
 func _spawn_camera() -> void:
 	_cam = CameraRig.new()

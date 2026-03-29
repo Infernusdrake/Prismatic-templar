@@ -216,7 +216,7 @@ func _handle_dodge(delta: float) -> void:
 func _handle_attack(delta: float) -> void:
 	if is_attacking:
 		attack_timer -= delta
-		var hit_t := ATTACK_DURATION[combo_index - 1] - ATTACK_HIT_FRAME[combo_index - 1]
+		var hit_t: float = ATTACK_DURATION[combo_index - 1] - ATTACK_HIT_FRAME[combo_index - 1]
 		if not hit_registered and attack_timer <= hit_t:
 			hit_registered = true
 			_try_land_hit()
@@ -245,7 +245,8 @@ func _start_attack() -> void:
 	hit_registered  = false
 	attack_timer    = ATTACK_DURATION[combo_index - 1]
 
-	var colors := [Color(1.0, 0.85, 0.2), Color(1.0, 0.5, 0.1), Color(1.0, 0.15, 0.1)]
+	var colors: Array[Color] = [Color(1.0, 0.85, 0.2), Color(1.0, 0.5, 0.1), Color(1.0, 0.15, 0.1)]
+	var col: Color = colors[combo_index - 1]
 	var tw := create_tween()
 	tw.tween_property(_mat, "albedo_color", colors[combo_index - 1], 0.05)
 	tw.tween_property(_mat, "albedo_color", Color(0.25, 0.5, 0.9),   0.15)

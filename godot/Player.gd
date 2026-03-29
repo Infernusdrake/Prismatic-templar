@@ -59,6 +59,7 @@ var _mat:          StandardMaterial3D
 var _parry_shield: MeshInstance3D
 var _parry_smat:   StandardMaterial3D
 var _parry_tw:     Tween = null
+var _animator:     PlayerAnimator = null
 
 # ── Hit-stop (time-scale freeze, tracked in real time) ────────────────────────
 var _hit_stop_end_ms: int = 0
@@ -84,7 +85,12 @@ func _ready() -> void:
 	_mesh.mesh = cm
 	_mesh.material_override = _mat
 	_mesh.position.y = 0.9
+	_mesh.name = "Body"
 	add_child(_mesh)
+
+	_animator = PlayerAnimator.new()
+	add_child(_animator)
+	_animator.init()
 
 	var col := CollisionShape3D.new()
 	var cs := CapsuleShape3D.new()
@@ -134,6 +140,21 @@ func _physics_process(delta: float) -> void:
 	_handle_movement(delta)
 	_handle_lockon()
 	move_and_slide()
+	_update_animation()
+
+func _update_animation() -> void:
+	if _animator == null:
+		return
+	var moving := Vector2(velocity.x, velocity.z).length() > 0.5
+	if is_attacking:
+		var anim_name := "attack_" + str(combo_index)
+		_animator.play(anim_name)
+	elif is_dodging:
+		_animator.play("dodge")
+	elif moving:
+		_animator.play("walk")
+	else:
+		_animator.play("idle")
 
 func _apply_gravity(delta: float) -> void:
 	if not is_on_floor():
@@ -264,6 +285,58 @@ func _try_land_hit() -> void:
 		punish_window_changed.emit(false, 0.0)
 
 	enemy.take_hit(ATTACK_DAMAGE[combo_index - 1], ATTACK_POSTURE[combo_index - 1] + bonus)
+
+	# Hit-stop: ~80 ms real-time freeze frame
+	_hit_stop(80)
+
+	# Camera shake on hit
+	if camera_rig and camera_rig.has_method("shake"):
+		camera_rig.shake(0.18)
+
+	# Particle burst at the impact point (midway between attacker and target)
+	var impact_pos := (global_position + enemy.global_position) * 0.5 + Vector3(0, 0.9, 0)
+	var hit_color  := Color(1.0, 0.9, 0.2) if bonus > 0.0 else Color(1.0, 0.5, 0.15)
+	_spawn_impact_fx(impact_pos, hit_color)
+
+func _spawn_impact_fx(pos: Vector3, color: Color) -> void:
+	var ps := GPUParticles3D.new()
+	ps.top_level    = true
+	ps.global_position = pos
+	ps.emitting     = false
+	ps.one_shot     = true
+	ps.explosiveness = 1.0
+	ps.amount       = 18
+	ps.lifetime     = 0.45
+
+	var mat := ParticleProcessMaterial.new()
+	mat.direction            = Vector3(0, 1, 0)
+	mat.spread               = 60.0
+	mat.initial_velocity_min = 3.5
+	mat.initial_velocity_max = 7.0
+	mat.gravity              = Vector3(0, -6.0, 0)
+	mat.scale_min            = 0.06
+	mat.scale_max            = 0.14
+	mat.color                = color
+	ps.process_material = mat
+
+	var mesh_inst := MeshInstance3D.new()
+	var sm        := SphereMesh.new()
+	sm.radius = 0.07
+	sm.height = 0.14
+	mesh_inst.mesh = sm
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color              = color
+	pm.emission_enabled          = true
+	pm.emission                  = color
+	pm.emission_energy_multiplier = 2.5
+	pm.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh_inst.material_override  = pm
+	ps.draw_pass_1 = sm
+
+	get_tree().root.add_child(ps)
+	ps.emitting = true
+	# Auto-remove after lifetime
+	get_tree().create_timer(0.6).timeout.connect(ps.queue_free)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Parry
@@ -466,6 +539,13 @@ func take_damage(amount: float) -> void:
 	# Heavier camera shake on full hit
 	if camera_rig and camera_rig.has_method("shake"):
 		camera_rig.shake(0.40)
+
+	# Hit-stop (60 ms — shorter than attack landing, signals the player took damage)
+	_hit_stop(60)
+
+	# Hit reaction animation (only if not mid-attack to avoid interrupting combo)
+	if _animator and not is_attacking:
+		_animator.force_play("hit_react")
 
 	# AUDIO: play player_hit.ogg  (impact thud, low pitch)
 

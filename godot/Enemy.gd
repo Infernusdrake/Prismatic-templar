@@ -540,6 +540,35 @@ func _flash_stagger() -> void:
 	tw.tween_property(_mat, "albedo_color", Color(1.0, 0.95, 0.1),  0.10)
 	tw.tween_property(_mat, "albedo_color", Color(0.8, 0.15, 0.15), 0.15)
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  Parry responses (called by Player)
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Returns true while the enemy is visibly telegraphing an attack (windup phase).
+## Player checks this at parry press-time to classify perfect vs. block.
+func is_winding_up() -> bool:
+	return ai_state == State.WINDUP
+
+## Perfect-parry stagger: long vulnerable window, cyan-white flash.
+func receive_parry_stagger() -> void:
+	_hide_windup()
+	_enter(State.RECOVERY, 1.8)
+	# AUDIO: play parry_stagger.ogg  (heavy impact, enemy grunt)
+	var tw := create_tween()
+	tw.tween_property(_mat, "albedo_color", Color(0.7, 1.0, 1.0), 0.05)
+	tw.tween_property(_mat, "albedo_color", Color(0.95, 0.95, 0.95), 0.20)
+	tw.tween_property(_mat, "albedo_color", Color(0.8, 0.15, 0.15),  0.45)
+
+## Block stagger: cancels an ongoing windup/attack, short recovery.
+func receive_block_stagger() -> void:
+	if ai_state == State.WINDUP or ai_state == State.ATTACKING:
+		_hide_windup()
+		_enter(State.RECOVERY, 0.45)
+	# AUDIO: play block_stagger.ogg  (short clang, medium pitch)
+	var tw := create_tween()
+	tw.tween_property(_mat, "albedo_color", Color(0.65, 0.65, 1.0), 0.05)
+	tw.tween_property(_mat, "albedo_color", Color(0.8, 0.15, 0.15), 0.22)
+
 func _play_finisher() -> void:
 	is_finishering = true
 	_hide_windup()

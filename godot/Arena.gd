@@ -33,6 +33,7 @@ func _setup_input_map() -> void:
 		"dodge":        KEY_SPACE,
 		"lock_on":      KEY_TAB,
 		"execute":      KEY_E,
+		"parry":        KEY_Q,
 		"restart":      KEY_R,
 	}
 	for name in key_actions:
@@ -179,6 +180,8 @@ func _spawn_hud() -> void:
 func _connect_signals() -> void:
 	_player.health_changed.connect(_hud.update_player_health)
 	_player.died.connect(_on_player_died)
+	_player.parry_result.connect(_hud.show_parry_result)
+	_player.punish_window_changed.connect(_hud.set_punish_window)
 
 	_enemy.health_changed.connect(_hud.update_enemy_health)
 	_enemy.posture_changed.connect(_hud.update_enemy_posture)

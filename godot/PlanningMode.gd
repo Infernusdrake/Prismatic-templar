@@ -35,9 +35,10 @@ func setup(player: Player, enemies: Array, cam_rig: CameraRig, env: Environment)
 	_enemies = enemies
 	_cam_rig = cam_rig
 	_env     = env
+	_build_overlay()
 
 func _ready() -> void:
-	_build_overlay()
+	pass
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Overlay construction
@@ -78,7 +79,7 @@ func _build_card(enemy: Enemy, idx: int) -> Control:
 	style.border_width_top    = 2
 	style.border_width_bottom = 2
 	var border_col := Color(1.0, 0.85, 0.10) if enemy.is_elite \
-	                  else Color(0.78, 0.78, 0.88)
+					  else Color(0.78, 0.78, 0.88)
 	style.border_color    = border_col
 	style.corner_radius_top_left     = 4
 	style.corner_radius_top_right    = 4
@@ -204,7 +205,7 @@ func _process(_delta: float) -> void:
 		_cards[i].global_position = screen_pt - _cards[i].size * 0.5
 		# Refresh mark glyph
 		var e_mark: int = e.mark_index
-		_card_marks[i].text = MARK_GLYPHS[e_mark - 1] if e_mark >= 1 else ""
+		_card_marks[i].text = MARK_GLYPHS[e_mark - 1] if e_mark >= 1 and e_mark <= MAX_MARKS else ""
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Activate / Deactivate

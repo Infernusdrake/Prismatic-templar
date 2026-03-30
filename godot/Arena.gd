@@ -38,7 +38,7 @@ func _setup_input_map() -> void:
 		"execute":       KEY_E,
 		"parry":         KEY_Q,
 		"restart":       KEY_R,
-		"planning_mode": KEY_TAB,
+		"planning_mode": KEY_Z,
 	}
 	for name in key_actions:
 		if not InputMap.has_action(name):

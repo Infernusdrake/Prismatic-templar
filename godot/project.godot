@@ -18,3 +18,10 @@ config/name="Prismatic Templar"
 config/description="3D Action RPG Combat Prototype"
 run/main_scene="res://Arena.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep_width"

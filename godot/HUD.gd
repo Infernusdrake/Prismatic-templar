@@ -63,17 +63,24 @@ func _process(delta: float) -> void:
 			_punish_bar.value = max(0.0, _punish_remaining)
 
 func _build() -> void:
+	# Root fills the entire viewport — all child anchors are relative to this.
+	# With canvas_items stretch mode in project settings, this layer scales
+	# uniformly from the 1920×1080 reference resolution.
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	# --- Player health (bottom-left) ---
+	# ── PLAYER HP — top-left, 20 px from each edge ───────────────────────────
+	# PRESET_TOP_LEFT anchors all four corners to (0,0), so offsets are
+	# measured purely in pixels from the top-left corner of the viewport.
 	var pl_vbox := VBoxContainer.new()
-	pl_vbox.set_anchor_and_offset(SIDE_LEFT,   0, 20)
-	pl_vbox.set_anchor_and_offset(SIDE_RIGHT,  0, 240)
-	pl_vbox.set_anchor_and_offset(SIDE_TOP,    1, -90)
-	pl_vbox.set_anchor_and_offset(SIDE_BOTTOM, 1, -20)
+	pl_vbox.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	pl_vbox.offset_left   = 20
+	pl_vbox.offset_top    = 20
+	pl_vbox.offset_right  = 260   # 20 + 240 content width
+	pl_vbox.offset_bottom = 88    # 20 + 68 content height (label + bar)
+	pl_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	root.add_child(pl_vbox)
 
 	var pl_lbl := Label.new()
@@ -82,19 +89,24 @@ func _build() -> void:
 	pl_vbox.add_child(pl_lbl)
 
 	_player_hp_bar = ProgressBar.new()
-	_player_hp_bar.custom_minimum_size = Vector2(200, 22)
+	_player_hp_bar.custom_minimum_size = Vector2(220, 22)
 	_player_hp_bar.max_value           = 100
 	_player_hp_bar.value               = 100
 	_player_hp_bar.show_percentage     = false
 	_add_bar_fill(_player_hp_bar, Color(0.2, 0.7, 0.25))
 	pl_vbox.add_child(_player_hp_bar)
 
-	# --- Enemy section (top-center) ---
+	# ── ENEMY HP + POSTURE — top-center, 20 px from top ─────────────────────
+	# PRESET_CENTER_TOP sets anchor_left/right = 0.5 (horizontal centre) and
+	# anchor_top/bottom = 0 (top edge).  Negative left/right offsets spread
+	# the box symmetrically around the horizontal midpoint.
 	var en_vbox := VBoxContainer.new()
-	en_vbox.set_anchor_and_offset(SIDE_LEFT,   0.5, -160)
-	en_vbox.set_anchor_and_offset(SIDE_RIGHT,  0.5,  160)
-	en_vbox.set_anchor_and_offset(SIDE_TOP,    0,    20)
-	en_vbox.set_anchor_and_offset(SIDE_BOTTOM, 0,   110)
+	en_vbox.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	en_vbox.offset_left   = -170   # half of 340 px total width
+	en_vbox.offset_top    = 20
+	en_vbox.offset_right  =  170
+	en_vbox.offset_bottom =  124   # 20 + 104 content (2 labels + 2 bars)
+	en_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	root.add_child(en_vbox)
 
 	var en_name := Label.new()
@@ -104,7 +116,7 @@ func _build() -> void:
 	en_vbox.add_child(en_name)
 
 	_enemy_hp_bar = ProgressBar.new()
-	_enemy_hp_bar.custom_minimum_size = Vector2(300, 22)
+	_enemy_hp_bar.custom_minimum_size = Vector2(320, 22)
 	_enemy_hp_bar.max_value           = 100
 	_enemy_hp_bar.value               = 100
 	_enemy_hp_bar.show_percentage     = false
@@ -117,19 +129,48 @@ func _build() -> void:
 	en_vbox.add_child(pt_lbl)
 
 	_posture_bar = ProgressBar.new()
-	_posture_bar.custom_minimum_size = Vector2(300, 16)
+	_posture_bar.custom_minimum_size = Vector2(320, 16)
 	_posture_bar.max_value           = 100
 	_posture_bar.value               = 0
 	_posture_bar.show_percentage     = false
 	_add_bar_fill(_posture_bar, Color(0.95, 0.75, 0.1))
 	en_vbox.add_child(_posture_bar)
 
-	# --- Execute prompt (center) ---
+	# ── COMBO COUNTER — centre of screen, slightly above centre ──────────────
+	# PRESET_CENTER anchors all four corners to (0.5, 0.5).  Negative top/
+	# bottom offsets move the element above the vertical midpoint.
+	_combo_lbl = Label.new()
+	_combo_lbl.set_anchors_preset(Control.PRESET_CENTER)
+	_combo_lbl.offset_left   = -220
+	_combo_lbl.offset_top    = -80
+	_combo_lbl.offset_right  =  220
+	_combo_lbl.offset_bottom = -42
+	_combo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combo_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	_combo_lbl.add_theme_font_size_override("font_size", 22)
+	root.add_child(_combo_lbl)
+
+	# ── PARRY RESULT FLASH — centre of screen, slightly above centre ─────────
+	# Sits just above the combo label; both share the "combat feedback zone"
+	# centred a little above the screen midpoint.
+	_parry_lbl = Label.new()
+	_parry_lbl.set_anchors_preset(Control.PRESET_CENTER)
+	_parry_lbl.offset_left   = -260
+	_parry_lbl.offset_top    = -140
+	_parry_lbl.offset_right  =  260
+	_parry_lbl.offset_bottom = -90
+	_parry_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_parry_lbl.add_theme_font_size_override("font_size", 28)
+	_parry_lbl.visible = false
+	root.add_child(_parry_lbl)
+
+	# ── EXECUTE PROMPT — dead-centre of screen ───────────────────────────────
 	_execute_panel = Panel.new()
-	_execute_panel.set_anchor_and_offset(SIDE_LEFT,   0.5, -130)
-	_execute_panel.set_anchor_and_offset(SIDE_RIGHT,  0.5,  130)
-	_execute_panel.set_anchor_and_offset(SIDE_TOP,    0.5, -55)
-	_execute_panel.set_anchor_and_offset(SIDE_BOTTOM, 0.5,  55)
+	_execute_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_execute_panel.offset_left   = -130
+	_execute_panel.offset_top    =  -58
+	_execute_panel.offset_right  =  130
+	_execute_panel.offset_bottom =   58
 	_execute_panel.visible = false
 	var p_style := StyleBoxFlat.new()
 	p_style.bg_color            = Color(0.05, 0.02, 0.0, 0.85)
@@ -165,58 +206,15 @@ func _build() -> void:
 	_exec_timer_lbl.add_theme_font_size_override("font_size", 22)
 	exec_vbox.add_child(_exec_timer_lbl)
 
-	# --- Combo indicator (right-center) ---
-	_combo_lbl = Label.new()
-	_combo_lbl.set_anchor_and_offset(SIDE_LEFT,   1, -250)
-	_combo_lbl.set_anchor_and_offset(SIDE_RIGHT,  1,  -20)
-	_combo_lbl.set_anchor_and_offset(SIDE_TOP,    0.5, -20)
-	_combo_lbl.set_anchor_and_offset(SIDE_BOTTOM, 0.5,  20)
-	_combo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_combo_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
-	_combo_lbl.add_theme_font_size_override("font_size", 22)
-	root.add_child(_combo_lbl)
-
-	# --- Lock-on indicator (bottom-right) ---
-	_lockon_lbl = Label.new()
-	_lockon_lbl.text = "[ LOCK-ON ]"
-	_lockon_lbl.set_anchor_and_offset(SIDE_LEFT,   1, -160)
-	_lockon_lbl.set_anchor_and_offset(SIDE_RIGHT,  1,  -20)
-	_lockon_lbl.set_anchor_and_offset(SIDE_TOP,    1,  -50)
-	_lockon_lbl.set_anchor_and_offset(SIDE_BOTTOM, 1,  -20)
-	_lockon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_lockon_lbl.add_theme_color_override("font_color", Color(0.2, 1.0, 0.8))
-	_lockon_lbl.visible = false
-	root.add_child(_lockon_lbl)
-
-	# --- Controls hint (bottom-center) ---
-	var hint := Label.new()
-	hint.text = "WASD Move  |  Space Dodge  |  LMB Attack  |  Q Parry  |  F Lock-on  |  E Execute  |  Tab Plan"
-	hint.set_anchor_and_offset(SIDE_LEFT,   0.5, -420)
-	hint.set_anchor_and_offset(SIDE_RIGHT,  0.5,  420)
-	hint.set_anchor_and_offset(SIDE_TOP,    1,    -22)
-	hint.set_anchor_and_offset(SIDE_BOTTOM, 1,      0)
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	hint.add_theme_font_size_override("font_size", 13)
-	root.add_child(hint)
-
-	# --- Parry result flash (center-left, brief) ---
-	_parry_lbl = Label.new()
-	_parry_lbl.set_anchor_and_offset(SIDE_LEFT,   0.5, -320)
-	_parry_lbl.set_anchor_and_offset(SIDE_RIGHT,  0.5,   80)
-	_parry_lbl.set_anchor_and_offset(SIDE_TOP,    0.5,  -15)
-	_parry_lbl.set_anchor_and_offset(SIDE_BOTTOM, 0.5,   25)
-	_parry_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_parry_lbl.add_theme_font_size_override("font_size", 28)
-	_parry_lbl.visible = false
-	root.add_child(_parry_lbl)
-
-	# --- Punish window panel (right side, below combo) ---
+	# ── PUNISH WINDOW — centre-right, just below vertical midpoint ───────────
+	# PRESET_CENTER_RIGHT anchors to (1.0, 0.5).  Negative left/right offsets
+	# pull the panel inward from the right edge.
 	_punish_panel = Panel.new()
-	_punish_panel.set_anchor_and_offset(SIDE_LEFT,   1, -230)
-	_punish_panel.set_anchor_and_offset(SIDE_RIGHT,  1,  -20)
-	_punish_panel.set_anchor_and_offset(SIDE_TOP,    0.5,  28)
-	_punish_panel.set_anchor_and_offset(SIDE_BOTTOM, 0.5,  82)
+	_punish_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	_punish_panel.offset_left   = -234
+	_punish_panel.offset_top    =   18
+	_punish_panel.offset_right  =  -20
+	_punish_panel.offset_bottom =   76
 	_punish_panel.visible = false
 	var pu_style := StyleBoxFlat.new()
 	pu_style.bg_color            = Color(0.06, 0.04, 0.0, 0.88)
@@ -248,13 +246,47 @@ func _build() -> void:
 	_add_bar_fill(_punish_bar, Color(1.0, 0.85, 0.1))
 	pu_vbox.add_child(_punish_bar)
 
-	# --- Message overlay (center, big) ---
+	# ── LOCK-ON INDICATOR — bottom-right, 20 px margin ───────────────────────
+	# PRESET_BOTTOM_RIGHT anchors to (1, 1).  Negative offsets pull elements
+	# inward from the bottom-right corner.
+	_lockon_lbl = Label.new()
+	_lockon_lbl.text = "[ LOCK-ON ]"
+	_lockon_lbl.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_lockon_lbl.offset_left   = -170
+	_lockon_lbl.offset_top    =  -46
+	_lockon_lbl.offset_right  =  -20
+	_lockon_lbl.offset_bottom =  -20
+	_lockon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_lockon_lbl.add_theme_color_override("font_color", Color(0.2, 1.0, 0.8))
+	_lockon_lbl.visible = false
+	root.add_child(_lockon_lbl)
+
+	# ── CONTROLS HINT — bottom edge, full width with 20 px side margins ───────
+	# PRESET_BOTTOM_WIDE sets anchor_left=0, anchor_right=1, anchor_top/
+	# bottom=1.  offset_left/right provide the side margins; negative
+	# top/bottom offsets lift the label above the very bottom of the screen.
+	var hint := Label.new()
+	hint.text = "WASD Move  |  Space Dodge  |  LMB Attack  |  Q Parry  |  F Lock-on  |  E Execute  |  Tab Plan"
+	hint.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	hint.offset_left   =  20
+	hint.offset_top    = -26
+	hint.offset_right  = -20
+	hint.offset_bottom =  -4
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	hint.add_theme_font_size_override("font_size", 13)
+	hint.clip_text = true
+	root.add_child(hint)
+
+	# ── MESSAGE OVERLAY — dead-centre, large text ─────────────────────────────
 	_msg_lbl = Label.new()
-	_msg_lbl.set_anchor_and_offset(SIDE_LEFT,   0.5, -300)
-	_msg_lbl.set_anchor_and_offset(SIDE_RIGHT,  0.5,  300)
-	_msg_lbl.set_anchor_and_offset(SIDE_TOP,    0.5, -40)
-	_msg_lbl.set_anchor_and_offset(SIDE_BOTTOM, 0.5,  40)
+	_msg_lbl.set_anchors_preset(Control.PRESET_CENTER)
+	_msg_lbl.offset_left   = -320
+	_msg_lbl.offset_top    =  -60
+	_msg_lbl.offset_right  =  320
+	_msg_lbl.offset_bottom =   60
 	_msg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_msg_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_msg_lbl.add_theme_color_override("font_color", Color(1, 0.85, 0.1))
 	_msg_lbl.add_theme_font_size_override("font_size", 44)
 	_msg_lbl.visible = false

@@ -190,7 +190,7 @@ func _build() -> void:
 
 	# --- Controls hint (bottom-center) ---
 	var hint := Label.new()
-	hint.text = "WASD Move  |  Space Dodge  |  LMB Attack  |  Q Parry  |  Tab Lock-on  |  E Execute"
+	hint.text = "WASD Move  |  Space Dodge  |  LMB Attack  |  Q Parry  |  F Lock-on  |  E Execute  |  Tab Plan"
 	hint.set_anchor_and_offset(SIDE_LEFT,   0.5, -420)
 	hint.set_anchor_and_offset(SIDE_RIGHT,  0.5,  420)
 	hint.set_anchor_and_offset(SIDE_TOP,    1,    -22)

@@ -1,6 +1,17 @@
 class_name Enemy
 extends CharacterBody3D
 
+# ── Identity data pools ───────────────────────────────────────────────────────
+const NAMES  := ["Soldato", "Ardent", "Vexer", "Riven", "Thorn"]
+const TRAITS := ["Aggressive", "Patient", "Caller", "Berserker", "Coward"]
+const GEMS   := {
+	"Ruby":     Color(1.00, 0.10, 0.10),
+	"Sapphire": Color(0.15, 0.35, 1.00),
+	"Emerald":  Color(0.10, 0.80, 0.30),
+	"Topaz":    Color(1.00, 0.60, 0.10),
+	"Amethyst": Color(0.60, 0.20, 1.00),
+}
+
 # ── Existing combat constants ────────────────────────────────────────────────
 const EXECUTE_WINDOW      := 2.0
 const EXECUTE_DAMAGE      := 50.0
@@ -57,6 +68,17 @@ var execute_timer       := 0.0
 var is_dead             := false
 var is_finishering      := false
 
+# ── Identity (randomised in _ready, overridable before add_child) ─────────────
+var enemy_name:   String = "Soldato"
+var combat_trait: String = "Aggressive"
+var gem_type:     String = "Ruby"
+var gem_color:    Color  = Color(1.0, 0.1, 0.1)
+var is_elite:     bool   = false
+
+# ── Planning-mode state ───────────────────────────────────────────────────────
+var mark_index:              int  = -1    # -1=unmarked, 1-4=mark order
+var _posture_first_hit_used: bool = false
+
 # ── Visuals ───────────────────────────────────────────────────────────────────
 var _mesh:        MeshInstance3D
 var _mat:         StandardMaterial3D
@@ -77,6 +99,14 @@ signal died
 
 func _ready() -> void:
 	_spawn_pos = position
+
+	# Randomise identity (can be overridden by Arena before add_child via set_deferred)
+	if not is_elite:
+		enemy_name   = NAMES [randi() % NAMES.size()]
+	combat_trait = TRAITS[randi() % TRAITS.size()]
+	var gem_keys := GEMS.keys()
+	gem_type  = gem_keys[randi() % gem_keys.size()]
+	gem_color = GEMS[gem_type]
 
 	# Body
 	_mat = StandardMaterial3D.new()
@@ -498,6 +528,11 @@ func take_hit(dmg: float, posture_dmg: float) -> void:
 	health_changed.emit(health, max_health)
 	posture_regen_timer = POSTURE_REGEN_DELAY
 
+	# Planning-mode bonus: first hit on a marked enemy gets 1.5× posture damage
+	if mark_index >= 0 and not _posture_first_hit_used:
+		posture_dmg *= 1.5
+		_posture_first_hit_used = true
+
 	if not execute_ready:
 		posture = min(max_posture, posture + posture_dmg)
 		posture_changed.emit(posture, max_posture)
@@ -602,6 +637,23 @@ func _expire_execute() -> void:
 	_flash_stagger()
 	# Re-enter combat after stagger
 	_enter(State.RECOVERY, 0.8)
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Planning-mode API
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Called by PlanningMode to mark/unmark this enemy.
+## idx -1 = unmark; 1-4 = mark order.
+func set_marked(idx: int) -> void:
+	mark_index              = idx
+	_posture_first_hit_used = false
+	if idx >= 0:
+		_mat.emission_enabled          = true
+		_mat.emission                  = Color(0.5, 0.7, 1.0) if not is_elite \
+		                                 else Color(1.0, 0.85, 0.2)
+		_mat.emission_energy_multiplier = 1.4
+	else:
+		_mat.emission_enabled = false
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Flash helpers

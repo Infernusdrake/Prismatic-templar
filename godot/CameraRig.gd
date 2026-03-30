@@ -10,7 +10,8 @@ var target: Node3D = null
 var yaw   := 0.0
 var pitch := -0.38
 
-var _shake_amt := 0.0
+var _shake_amt  := 0.0
+var _extra_dist := 0.0     # added by planning mode zoom-out
 const SHAKE_DECAY := 14.0
 
 func _ready() -> void:
@@ -44,7 +45,7 @@ func _process(_delta: float) -> void:
 		sin(-pitch),
 		cos(yaw)  * cos(-pitch)
 	)
-	var cam_pos := focus + cam_dir * DISTANCE
+	var cam_pos := focus + cam_dir * (DISTANCE + _extra_dist)
 
 	# Apply screen-space shake offset
 	var shake_offset := Vector3.ZERO
@@ -65,3 +66,9 @@ func _process(_delta: float) -> void:
 ## Multiple callers accumulate — the larger value wins.
 func shake(intensity: float) -> void:
 	_shake_amt = max(_shake_amt, intensity)
+
+## Tween the camera distance in/out for planning mode.
+func set_planning_mode(on: bool) -> void:
+	var tw := create_tween()
+	tw.tween_property(self, "_extra_dist", 5.0 if on else 0.0, 0.35) \
+	  .set_trans(Tween.TRANS_SINE)

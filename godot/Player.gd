@@ -14,6 +14,13 @@ const ATTACK_POSTURE   := [10.0, 12.0, 28.0]
 const ATTACK_DURATION  := [0.35, 0.35, 0.50]
 const ATTACK_HIT_FRAME := [0.15, 0.15, 0.22]
 
+# ── Opener (cinematic pre-combat sequence) ────────────────────────────────────
+const OPENER_KILL_THRESHOLD := 0.60   # instant kill if enemy health ≤ 60 %
+const OPENER_DAMAGE         := 30.0
+const OPENER_POSTURE        := 50.0
+const OPENER_MOVE_SPEED     := 7.0
+const OPENER_RANGE          := 2.2
+
 # ── Parry ─────────────────────────────────────────────────────────────────────
 const PARRY_ACTIVE_DURATION := 0.42   # how long the window stays open
 const PARRY_COOLDOWN        := 0.65   # lockout after any parry attempt / expiry
@@ -49,6 +56,13 @@ var parry_bonus_timer  := 0.0
 var locked_on      := false
 var lock_on_target: Node3D = null
 
+# ── Opener state ──────────────────────────────────────────────────────────────
+var input_frozen:    bool    = false
+var _opener_active:  bool    = false
+var _opener_target:  Node3D  = null
+var _opener_stage:   int     = 0     # 0=move  1=attack  2=pause
+var _opener_timer:   float   = 0.0
+
 # ── References (set by Arena) ─────────────────────────────────────────────────
 var enemy:      Node3D = null
 var camera_rig: Node3D = null
@@ -69,6 +83,7 @@ signal health_changed(val: float, max_val: float)
 signal died
 signal parry_result(result: String)                       # "perfect" | "block" | "miss"
 signal punish_window_changed(active: bool, dur: float)
+signal opener_finished
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Setup
@@ -134,6 +149,21 @@ func _process(_delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	_apply_gravity(delta)
+
+	# Opener: auto-move → attack → pause → done
+	if _opener_active:
+		_run_opener(delta)
+		move_and_slide()
+		_update_animation()
+		return
+
+	# Input frozen (e.g. during planning-mode transition)
+	if input_frozen:
+		velocity.x = move_toward(velocity.x, 0.0, SPEED * 8 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, SPEED * 8 * delta)
+		move_and_slide()
+		return
+
 	_handle_parry(delta)
 	_handle_dodge(delta)
 	_handle_attack(delta)
@@ -159,6 +189,61 @@ func _update_animation() -> void:
 func _apply_gravity(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Opener (cinematic auto-attack sequence)
+# ─────────────────────────────────────────────────────────────────────────────
+
+## Called by PlanningMode to kick off the cinematic opener.
+func start_opener(tgt: Node3D) -> void:
+	_opener_target = tgt
+	_opener_stage  = 0
+	_opener_active = true
+	input_frozen   = true
+
+func _run_opener(delta: float) -> void:
+	match _opener_stage:
+		0:  # ── Move toward target ──────────────────────────────────────────
+			var dist := global_position.distance_to(_opener_target.global_position)
+			if dist > OPENER_RANGE:
+				var dir := (_opener_target.global_position - global_position)
+				dir.y = 0.0
+				dir    = dir.normalized()
+				velocity.x = dir.x * OPENER_MOVE_SPEED
+				velocity.z = dir.z * OPENER_MOVE_SPEED
+				var look_t := Vector3(_opener_target.global_position.x,
+				                      global_position.y,
+				                      _opener_target.global_position.z)
+				if look_t.distance_squared_to(global_position) > 0.01:
+					look_at(look_t)
+			else:
+				velocity.x = 0.0
+				velocity.z = 0.0
+				_opener_stage = 1
+				combo_index   = 0      # ensure attack_1
+				_start_attack()
+
+		1:  # ── Wait for attack animation to finish ─────────────────────────
+			velocity.x = 0.0
+			velocity.z = 0.0
+			if not is_attacking:
+				if _opener_target and not (_opener_target as Enemy).is_dead:
+					var tgt := _opener_target as Enemy
+					if tgt.health <= tgt.max_health * OPENER_KILL_THRESHOLD:
+						tgt._die()
+					else:
+						tgt.take_hit(OPENER_DAMAGE, OPENER_POSTURE)
+				_opener_stage = 2
+				_opener_timer = 0.4
+
+		2:  # ── Brief pause then restore control ────────────────────────────
+			velocity.x    = 0.0
+			velocity.z    = 0.0
+			_opener_timer -= delta
+			if _opener_timer <= 0.0:
+				_opener_active = false
+				input_frozen   = false
+				opener_finished.emit()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Movement

@@ -319,25 +319,24 @@ func show_parry_result(result: String) -> void:
 			_parry_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.15))
 			_parry_lbl.add_theme_font_size_override("font_size", 30)
 			_parry_timer = 1.5
-			# Animate: scale punch then settle
-			_parry_lbl.scale = Vector3(1.4, 1.4, 1.0)
+			_parry_lbl.scale = Vector2(1.4, 1.4)
 			var tw := _parry_lbl.create_tween()
-			tw.tween_property(_parry_lbl, "scale", Vector3.ONE, 0.25) \
+			tw.tween_property(_parry_lbl, "scale", Vector2.ONE, 0.25) \
 					.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		"block":
 			_parry_lbl.text = "BLOCK"
 			_parry_lbl.add_theme_color_override("font_color", Color(0.5, 0.78, 1.0))
 			_parry_lbl.add_theme_font_size_override("font_size", 24)
 			_parry_timer = 0.9
-			_parry_lbl.scale = Vector3.ONE
+			_parry_lbl.scale = Vector2.ONE
 		"miss":
 			_parry_lbl.text = "MISS"
 			_parry_lbl.add_theme_color_override("font_color", Color(0.75, 0.22, 0.22))
 			_parry_lbl.add_theme_font_size_override("font_size", 19)
 			_parry_timer = 0.65
-			_parry_lbl.scale = Vector3.ONE
+			_parry_lbl.scale = Vector2.ONE
 	_parry_lbl.modulate.a = 1.0
-	_parry_lbl.visible    = true
+	_parry_lbl.visible = true
 
 ## Open or close the punish window countdown.
 func set_punish_window(active: bool, duration: float) -> void:

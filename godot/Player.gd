@@ -212,8 +212,8 @@ func _run_opener(delta: float) -> void:
 				velocity.x = dir.x * OPENER_MOVE_SPEED
 				velocity.z = dir.z * OPENER_MOVE_SPEED
 				var look_t := Vector3(_opener_target.global_position.x,
-				                      global_position.y,
-				                      _opener_target.global_position.z)
+									  global_position.y,
+									  _opener_target.global_position.z)
 				if look_t.distance_squared_to(global_position) > 0.01:
 					look_at(look_t)
 			else:

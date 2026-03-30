@@ -108,31 +108,35 @@ func _ready() -> void:
 	gem_type  = gem_keys[randi() % gem_keys.size()]
 	gem_color = GEMS[gem_type]
 
-	# Body
+	# _mat kept as a dummy for existing flash-tween code — not rendered.
 	_mat = StandardMaterial3D.new()
-	_mat.albedo_color = Color(0.8, 0.15, 0.15)
 
-	_mesh = MeshInstance3D.new()
-	var cm := CapsuleMesh.new()
-	cm.radius = 0.4
-	cm.height = 1.8
-	_mesh.mesh = cm
-	_mesh.material_override = _mat
-	_mesh.position.y = 0.9
-	_mesh.name = "Body"
-	add_child(_mesh)
+	# ── Quaternius glTF character (Knight) ────────────────────────────────────
+	var gltf := load("res://assets/characters/Knight_Golden_Male.glTF")
+	if gltf:
+		var inst: Node3D = gltf.instantiate()
+		inst.name = "CharacterArmature"
+		add_child(inst)
+		# _mesh points to the model root so finisher/death scale tweens are visible.
+		_mesh = inst
+	else:
+		# Fallback: invisible dummy so tween targets never crash
+		_mesh = MeshInstance3D.new()
+		_mesh.name = "Body"
 
-	_animator = EnemyAnimator.new()
-	add_child(_animator)
-	_animator.init()
-
+	# ── Collision capsule (unchanged) ─────────────────────────────────────────
 	var col := CollisionShape3D.new()
-	var cs := CapsuleShape3D.new()
+	var cs  := CapsuleShape3D.new()
 	cs.radius = 0.4
 	cs.height = 1.8
 	col.shape = cs
 	col.position.y = 0.9
 	add_child(col)
+
+	# ── Animator — must be added AFTER the model so AnimationPlayer exists ────
+	_animator = EnemyAnimator.new()
+	add_child(_animator)
+	_animator.init()
 
 	# Lock-on ring
 	var ring := MeshInstance3D.new()

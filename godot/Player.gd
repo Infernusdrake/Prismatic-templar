@@ -75,8 +75,8 @@ var _parry_smat:   StandardMaterial3D
 var _parry_tw:     Tween = null
 var _animator:     PlayerAnimator = null
 
-# ── Hit-stop (time-scale freeze, tracked in real time) ────────────────────────
-var _hit_stop_end_ms: int = 0
+# ── Hit-stop (full time-scale freeze, restored by a real-time SceneTreeTimer) ─
+# _hit_stop_end_ms removed — restoration is now handled by the timer callback.
 
 # ── Signals ───────────────────────────────────────────────────────────────────
 signal health_changed(val: float, max_val: float)
@@ -90,30 +90,45 @@ signal opener_finished
 # ─────────────────────────────────────────────────────────────────────────────
 
 func _ready() -> void:
-	_mat = StandardMaterial3D.new()
-	_mat.albedo_color = Color(0.25, 0.5, 0.9)
-
+	# _mat kept as a dummy — existing flash-tween calls still compile and run
+	# harmlessly on a material not applied to any visible surface.
+	_mat  = StandardMaterial3D.new()
+	# _mesh kept as a dummy reference for code that reads/tweens it.
+	# It is intentionally NOT added to the scene tree.
 	_mesh = MeshInstance3D.new()
-	var cm := CapsuleMesh.new()
-	cm.radius = 0.4
-	cm.height = 1.8
-	_mesh.mesh = cm
-	_mesh.material_override = _mat
-	_mesh.position.y = 0.9
 	_mesh.name = "Body"
-	add_child(_mesh)
 
-	_animator = PlayerAnimator.new()
-	add_child(_animator)
-	_animator.init()
+	# ── Quaternius glTF character (Kael / Ninja) ──────────────────────────────
+	var gltf := load("res://assets/characters/Ninja_Male_Hair.glTF")
+	if gltf:
+		var inst: Node3D = gltf.instantiate()
+		inst.name = "CharacterArmature"
+		add_child(inst)
 
+	# ── Collision capsule (unchanged) ─────────────────────────────────────────
 	var col := CollisionShape3D.new()
-	var cs := CapsuleShape3D.new()
+	var cs  := CapsuleShape3D.new()
 	cs.radius = 0.4
 	cs.height = 1.8
 	col.shape = cs
 	col.position.y = 0.9
 	add_child(col)
+
+	# ── Chest glow — dark red OmniLight with heartbeat pulse ──────────────────
+	var chest_light := OmniLight3D.new()
+	chest_light.position     = Vector3(0, 1.0, 0)
+	chest_light.light_color  = Color.from_string("#8B1A1A", Color.RED)
+	chest_light.light_energy = 0.8
+	chest_light.omni_range   = 1.5
+	add_child(chest_light)
+	var pulse_tw := create_tween().set_loops()
+	pulse_tw.tween_property(chest_light, "light_energy", 0.6, 0.6)
+	pulse_tw.tween_property(chest_light, "light_energy", 1.0, 0.6)
+
+	# ── Animator — must be added AFTER the model so AnimationPlayer exists ────
+	_animator = PlayerAnimator.new()
+	add_child(_animator)
+	_animator.init()
 
 	# Parry shield bubble (sphere that wraps the capsule)
 	_parry_smat = StandardMaterial3D.new()
@@ -142,10 +157,7 @@ func _ready() -> void:
 # ─────────────────────────────────────────────────────────────────────────────
 
 func _process(_delta: float) -> void:
-	# Restore time-scale after hit-stop (use real time, not scaled delta)
-	if _hit_stop_end_ms > 0 and Time.get_ticks_msec() >= _hit_stop_end_ms:
-		Engine.time_scale = 1.0
-		_hit_stop_end_ms  = 0
+	pass   # hit-stop restoration is handled by SceneTreeTimer callback in _hit_stop()
 
 func _physics_process(delta: float) -> void:
 	_apply_gravity(delta)
@@ -572,8 +584,12 @@ func _on_block(amount: float) -> void:
 		died.emit()
 
 func _hit_stop(real_ms: int) -> void:
-	Engine.time_scale = 0.04
-	_hit_stop_end_ms  = Time.get_ticks_msec() + real_ms
+	# Full freeze — Engine.time_scale = 0.0 halts all physics and animation.
+	# SceneTreeTimer with ignore_time_scale=true runs on the OS clock, so it
+	# fires after the real wall-clock duration regardless of time_scale.
+	Engine.time_scale = 0.0
+	get_tree().create_timer(real_ms * 0.001, true, false, true)\
+			.timeout.connect(func() -> void: Engine.time_scale = 1.0)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Lock-on

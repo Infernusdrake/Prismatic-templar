@@ -27,6 +27,9 @@ var _punish_duration := 0.0
 var _punish_remaining := 0.0
 var _punish_tw:      Tween = null
 
+# ── Crosshair ─────────────────────────────────────────────────────────────────
+var _crosshair:      Label
+
 func _ready() -> void:
 	layer = 10
 	_build()
@@ -70,6 +73,21 @@ func _build() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+
+	# ── CROSSHAIR — dead-centre of screen ───────────────────────────────────
+	_crosshair = Label.new()
+	_crosshair.text = "·"
+	_crosshair.add_theme_font_size_override("font_size", 28)
+	_crosshair.add_theme_color_override("font_color", Color.WHITE)
+	_crosshair.set_anchor_and_offset(SIDE_LEFT,   0.5, -10)
+	_crosshair.set_anchor_and_offset(SIDE_RIGHT,  0.5,  10)
+	_crosshair.set_anchor_and_offset(SIDE_TOP,    0.5, -12)
+	_crosshair.set_anchor_and_offset(SIDE_BOTTOM, 0.5,  12)
+	_crosshair.custom_minimum_size     = Vector2(20, 20)
+	_crosshair.horizontal_alignment    = HORIZONTAL_ALIGNMENT_CENTER
+	_crosshair.vertical_alignment      = VERTICAL_ALIGNMENT_CENTER
+	_crosshair.mouse_filter            = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_crosshair)
 
 	# ── PLAYER HP — top-left, 20 px from each edge ───────────────────────────
 	# PRESET_TOP_LEFT anchors all four corners to (0,0), so offsets are
@@ -266,7 +284,7 @@ func _build() -> void:
 	# bottom=1.  offset_left/right provide the side margins; negative
 	# top/bottom offsets lift the label above the very bottom of the screen.
 	var hint := Label.new()
-	hint.text = "WASD Move  |  Space Dodge  |  LMB Attack  |  Q Parry  |  F Lock-on  |  E Execute  |  Tab Plan"
+	hint.text = "WASD Move  |  Space Dodge  |  LMB Attack  |  RMB Ranged  |  Q Parry  |  F Lock-on  |  E Execute  |  Tab Plan"
 	hint.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	hint.offset_left   =  20
 	hint.offset_top    = -26

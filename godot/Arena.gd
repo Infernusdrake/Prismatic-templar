@@ -53,6 +53,12 @@ func _setup_input_map() -> void:
 	mb.button_index = MOUSE_BUTTON_LEFT
 	InputMap.action_add_event("attack", mb)
 
+	if not InputMap.has_action("ranged"):
+		InputMap.add_action("ranged")
+	var rmb := InputEventMouseButton.new()
+	rmb.button_index = MOUSE_BUTTON_RIGHT
+	InputMap.action_add_event("ranged", rmb)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("restart"):
 		get_tree().reload_current_scene()

@@ -99,6 +99,7 @@ signal died
 
 func _ready() -> void:
 	_spawn_pos = position
+	add_to_group("enemies")
 
 	# Randomise identity (can be overridden by Arena before add_child via set_deferred)
 	if not is_elite:

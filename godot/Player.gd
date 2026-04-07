@@ -28,6 +28,12 @@ const PARRY_BLOCK_REDUCTION := 0.55   # fraction of damage absorbed on a block
 const PARRY_BONUS_POSTURE   := 40.0   # extra posture damage on punish hit
 const PARRY_BONUS_WINDOW    := 3.5    # seconds to land the punish hit
 
+# ── Ranged attack ─────────────────────────────────────────────────────────────
+const RANGED_DAMAGE     := 15.0
+const RANGED_RANGE      := 25.0
+const RANGED_COOLDOWN_T := 0.6
+const RANGED_MIN_HOLD   := 0.1
+
 enum ParryState { NONE, ACTIVE, COOLDOWN }
 
 # ── State vars ────────────────────────────────────────────────────────────────
@@ -74,6 +80,15 @@ var _parry_shield: MeshInstance3D
 var _parry_smat:   StandardMaterial3D
 var _parry_tw:     Tween = null
 var _animator:     PlayerAnimator = null
+
+# ── Ranged visuals ────────────────────────────────────────────────────────────
+var _ranged_holding:   bool  = false
+var _ranged_hold_time: float = 0.0
+var _ranged_cooldown:  float = 0.0
+var _charge_orb:   MeshInstance3D    = null
+var _charge_mat:   StandardMaterial3D = null
+var _flash_layer:  CanvasLayer        = null
+var _flash_rect:   ColorRect          = null
 
 # ── Hit-stop (full time-scale freeze, restored by a real-time SceneTreeTimer) ─
 # _hit_stop_end_ms removed — restoration is now handled by the timer callback.
@@ -152,6 +167,37 @@ func _ready() -> void:
 	_parry_shield.visible           = false
 	add_child(_parry_shield)
 
+	# ── Ranged charge orb — cyan sphere on Kael's right hand ──────────────────
+	_charge_mat = StandardMaterial3D.new()
+	_charge_mat.albedo_color               = Color(0.3, 0.85, 1.0, 0.9)
+	_charge_mat.emission_enabled           = true
+	_charge_mat.emission                   = Color(0.3, 0.85, 1.0)
+	_charge_mat.emission_energy_multiplier = 3.0
+	_charge_mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_charge_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	_charge_orb = MeshInstance3D.new()
+	var corb := SphereMesh.new()
+	corb.radius = 0.08
+	corb.height = 0.16
+	_charge_orb.mesh              = corb
+	_charge_orb.material_override = _charge_mat
+	_charge_orb.position          = Vector3(0.35, 0.95, 0.3)   # approx right-hand
+	_charge_orb.scale             = Vector3.ZERO
+	_charge_orb.visible           = false
+	add_child(_charge_orb)
+
+	# ── Screen-space flash overlay ─────────────────────────────────────────────
+	_flash_layer       = CanvasLayer.new()
+	_flash_layer.layer = 15
+	add_child(_flash_layer)
+	_flash_rect = ColorRect.new()
+	_flash_rect.color = Color(0.3, 0.85, 1.0, 0.0)
+	_flash_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash_rect.visible      = false
+	_flash_layer.add_child(_flash_rect)
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Per-frame
 # ─────────────────────────────────────────────────────────────────────────────
@@ -179,6 +225,7 @@ func _physics_process(delta: float) -> void:
 	_handle_parry(delta)
 	_handle_dodge(delta)
 	_handle_attack(delta)
+	_handle_ranged(delta)
 	_handle_movement(delta)
 	_handle_lockon()
 	move_and_slide()
@@ -652,6 +699,191 @@ func take_damage(amount: float) -> void:
 
 	if health <= 0.0:
 		died.emit()
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Ranged attack
+# ─────────────────────────────────────────────────────────────────────────────
+
+func _handle_ranged(delta: float) -> void:
+	if _ranged_cooldown > 0:
+		_ranged_cooldown -= delta
+
+	# Right-click pressed: begin charge
+	if Input.is_action_just_pressed("ranged") and _ranged_cooldown <= 0 and not is_dodging:
+		_ranged_holding   = true
+		_ranged_hold_time = 0.0
+		_charge_orb.visible = true
+		_charge_orb.scale   = Vector3.ZERO
+		var ctw := create_tween()
+		ctw.tween_property(_charge_orb, "scale", Vector3.ONE, 0.25) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		# Charge orb colour pulses while building up
+		var pulse := create_tween().set_loops(3)
+		pulse.tween_property(_charge_mat, "emission_energy_multiplier", 6.0, 0.08)
+		pulse.tween_property(_charge_mat, "emission_energy_multiplier", 3.0, 0.08)
+
+	if _ranged_holding:
+		_ranged_hold_time += delta
+
+	# Dodge cancels charge without firing
+	if _ranged_holding and is_dodging:
+		_ranged_holding = false
+		var ctw := create_tween()
+		ctw.tween_property(_charge_orb, "scale", Vector3.ZERO, 0.06)
+		ctw.tween_callback(func() -> void: _charge_orb.visible = false)
+
+	# Right-click released: fire if held long enough
+	if Input.is_action_just_released("ranged") and _ranged_holding:
+		_ranged_holding = false
+		var ctw := create_tween()
+		ctw.tween_property(_charge_orb, "scale", Vector3.ZERO, 0.06)
+		ctw.tween_callback(func() -> void: _charge_orb.visible = false)
+		if _ranged_hold_time >= RANGED_MIN_HOLD and _ranged_cooldown <= 0:
+			_fire_ranged()
+			_ranged_cooldown = RANGED_COOLDOWN_T
+
+func _fire_ranged() -> void:
+	# Determine fire direction from camera; fall back to player facing
+	var cam: Camera3D = null
+	if camera_rig:
+		cam = camera_rig.get_node_or_null("Camera3D") as Camera3D
+
+	var origin    := global_position + Vector3(0, 1.0, 0)
+	var direction := -global_transform.basis.z
+	if cam:
+		direction = -cam.global_transform.basis.z
+
+	# Hitscan — find the closest enemy along the beam
+	var hit_enemy: Node3D = null
+	var hit_dist          := RANGED_RANGE
+	for node in get_tree().get_nodes_in_group("enemies"):
+		var e := node as Enemy
+		if e == null or e.is_dead:
+			continue
+		var aim_pt := e.global_position + Vector3(0, 0.9, 0)
+		var to_e   := aim_pt - origin
+		var proj   := to_e.dot(direction)
+		if proj < 0.0 or proj > RANGED_RANGE:
+			continue
+		var closest := origin + direction * proj
+		if closest.distance_to(aim_pt) < 0.75 and proj < hit_dist:
+			hit_dist  = proj
+			hit_enemy = e
+
+	var impact_pos := origin + direction * hit_dist
+	if hit_enemy:
+		(hit_enemy as Enemy).take_hit(RANGED_DAMAGE, 5.0)
+		impact_pos = hit_enemy.global_position + Vector3(0, 0.9, 0)
+
+	_spawn_beam_fx(origin, direction, impact_pos)
+
+	# Screen-space flash — cyan tint that fades quickly
+	_flash_rect.color   = Color(0.3, 0.85, 1.0, 0.45)
+	_flash_rect.visible = true
+	var ftw := create_tween()
+	ftw.tween_property(_flash_rect, "color", Color(0.3, 0.85, 1.0, 0.0), 0.12)
+	ftw.tween_callback(func() -> void: _flash_rect.visible = false)
+
+	if camera_rig and camera_rig.has_method("shake"):
+		camera_rig.shake(0.10)
+
+func _spawn_beam_fx(origin: Vector3, direction: Vector3, impact_pos: Vector3) -> void:
+	var beam_length := origin.distance_to(impact_pos)
+	var midpoint    := origin + direction * (beam_length * 0.5)
+
+	# ── Beam cylinder ─────────────────────────────────────────────────────────
+	var beam_mat := StandardMaterial3D.new()
+	beam_mat.albedo_color               = Color(0.4, 0.9, 1.0, 0.9)
+	beam_mat.emission_enabled           = true
+	beam_mat.emission                   = Color(0.4, 0.9, 1.0)
+	beam_mat.emission_energy_multiplier = 6.0
+	beam_mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+	beam_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	beam_mat.cull_mode                 = BaseMaterial3D.CULL_DISABLED
+
+	var beam_mesh := CylinderMesh.new()
+	beam_mesh.top_radius    = 0.045
+	beam_mesh.bottom_radius = 0.045
+	beam_mesh.height        = beam_length
+
+	var beam_inst := MeshInstance3D.new()
+	beam_inst.mesh              = beam_mesh
+	beam_inst.material_override = beam_mat
+	get_tree().root.add_child(beam_inst)
+	beam_inst.global_position = midpoint
+	# Rotate local Y (cylinder axis) to align with beam direction
+	var ref  := Vector3.RIGHT if abs(direction.dot(Vector3.UP)) > 0.99 else Vector3.UP
+	var x_ax := ref.cross(direction).normalized()
+	var z_ax := x_ax.cross(direction).normalized()
+	beam_inst.global_transform.basis = Basis(x_ax, direction, z_ax)
+
+	# Persist 0.15 s then fade out
+	var btw := beam_inst.create_tween()
+	btw.tween_interval(0.15)
+	btw.tween_property(beam_mat, "albedo_color", Color(0.4, 0.9, 1.0, 0.0), 0.08)
+	btw.tween_callback(beam_inst.queue_free)
+
+	# ── Muzzle flash particles at origin ──────────────────────────────────────
+	_spawn_ranged_particles(origin, Color(0.5, 0.95, 1.0), 12, 4.0)
+
+	# ── Travelling orb along beam path ────────────────────────────────────────
+	var orb_mat := StandardMaterial3D.new()
+	orb_mat.albedo_color               = Color(0.85, 0.97, 1.0)
+	orb_mat.emission_enabled           = true
+	orb_mat.emission                   = Color(0.85, 0.97, 1.0)
+	orb_mat.emission_energy_multiplier = 8.0
+	orb_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	var orb_mi := MeshInstance3D.new()
+	var orb_sm := SphereMesh.new()
+	orb_sm.radius = 0.10
+	orb_sm.height = 0.20
+	orb_mi.mesh              = orb_sm
+	orb_mi.material_override = orb_mat
+	get_tree().root.add_child(orb_mi)
+	orb_mi.global_position = origin
+
+	var otw := orb_mi.create_tween()
+	otw.tween_property(orb_mi, "global_position", impact_pos, 0.12)
+	otw.tween_callback(func() -> void:
+		_spawn_ranged_particles(impact_pos, Color(0.3, 0.85, 1.0), 24, 7.0)
+		orb_mi.queue_free())
+
+func _spawn_ranged_particles(pos: Vector3, color: Color, amount: int, speed_max: float) -> void:
+	var ps := GPUParticles3D.new()
+	ps.top_level       = true
+	ps.global_position = pos
+	ps.emitting        = false
+	ps.one_shot        = true
+	ps.explosiveness   = 1.0
+	ps.amount          = amount
+	ps.lifetime        = 0.50
+
+	var mat := ParticleProcessMaterial.new()
+	mat.direction            = Vector3(0, 1, 0)
+	mat.spread               = 70.0
+	mat.initial_velocity_min = speed_max * 0.45
+	mat.initial_velocity_max = speed_max
+	mat.gravity              = Vector3(0, -4.0, 0)
+	mat.scale_min            = 0.04
+	mat.scale_max            = 0.11
+	mat.color                = color
+	ps.process_material = mat
+
+	var sm := SphereMesh.new()
+	sm.radius = 0.05
+	sm.height = 0.10
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color               = color
+	pm.emission_enabled           = true
+	pm.emission                   = color
+	pm.emission_energy_multiplier = 3.5
+	pm.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ps.draw_pass_1 = sm
+
+	get_tree().root.add_child(ps)
+	ps.emitting = true
+	get_tree().create_timer(0.70).timeout.connect(ps.queue_free)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Utility
